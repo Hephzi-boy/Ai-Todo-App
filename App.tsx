@@ -10,24 +10,27 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
-
-type Task = {
-  id: string;
-  title: string;
-  description?: string;
-  dueDate?: string;
-  completed: boolean;
-  createdAt: string;
-};
+import {
+  filterAndSortTasks,
+  getAudioMimeType,
+  getGeminiOutputText,
+  parseTaskTitlesFromGeminiText,
+  splitDictatedTasks,
+  Task,
+  TaskFilter,
+} from './src/tasks';
 
 type RootStackParamList = {
   Tasks: undefined;
@@ -36,6 +39,10 @@ type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const TASKS_KEY = 'airlabs.todo.tasks.v1';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const light = {
   primary: '#0D9488',
@@ -62,44 +69,6 @@ const dark = {
   border: '#2A6F68',
   danger: '#F87171',
 };
-
-function splitDictatedTasks(text: string) {
-  return text
-    .replace(/\s+/g, ' ')
-    .split(/\s*(?:,|;|\.|\band then\b|\bthen\b|\band\b)\s*/i)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 1);
-}
-
-function extractJsonObject(text: string) {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) return null;
-  return text.slice(start, end + 1);
-}
-
-function getGeminiOutputText(data: any) {
-  if (typeof data?.output_text === 'string') return data.output_text;
-  if (typeof data?.outputText === 'string') return data.outputText;
-
-  const textParts = data?.steps
-    ?.flatMap((step: any) => step?.content ?? [])
-    ?.filter((part: any) => part?.type === 'text' && typeof part?.text === 'string')
-    ?.map((part: any) => part.text);
-
-  return Array.isArray(textParts) ? textParts.join('\n').trim() : '';
-}
-
-function getAudioMimeType(uri: string) {
-  const lowerUri = uri.toLowerCase();
-  if (lowerUri.endsWith('.mp3')) return 'audio/mp3';
-  if (lowerUri.endsWith('.wav')) return 'audio/wav';
-  if (lowerUri.endsWith('.aac')) return 'audio/aac';
-  if (lowerUri.endsWith('.ogg')) return 'audio/ogg';
-  if (lowerUri.endsWith('.flac')) return 'audio/flac';
-  if (lowerUri.endsWith('.m4a')) return 'audio/m4a';
-  return 'audio/m4a';
-}
 
 async function transcribeTasksWithGemini(uri: string) {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
@@ -142,15 +111,7 @@ async function transcribeTasksWithGemini(uri: string) {
     throw new Error('Gemini returned no transcript text. Try recording again with clearer audio.');
   }
 
-  const jsonText = extractJsonObject(outputText);
-  if (!jsonText) return splitDictatedTasks(outputText);
-
-  const parsed = JSON.parse(jsonText);
-  if (!Array.isArray(parsed.tasks)) return splitDictatedTasks(outputText);
-
-  return parsed.tasks
-    .map((task: { title?: unknown }) => (typeof task.title === 'string' ? task.title.trim() : ''))
-    .filter(Boolean);
+  return parseTaskTitlesFromGeminiText(outputText);
 }
 
 function AppShell() {
@@ -174,6 +135,7 @@ function AppShell() {
   const addTask = useCallback((title: string, description?: string, dueDate?: string) => {
     const cleanTitle = title.trim();
     if (!cleanTitle) return false;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setTasks((current) => [
       {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -191,6 +153,7 @@ function AppShell() {
   const addMany = useCallback((titles: string[]) => {
     const clean = titles.map((title) => title.trim()).filter(Boolean);
     if (!clean.length) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setTasks((current) => [
       ...clean.map((title) => ({
         id: `${Date.now()}-${title}-${Math.random().toString(36).slice(2)}`,
@@ -203,10 +166,12 @@ function AppShell() {
   }, []);
 
   const toggleTask = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setTasks((current) => current.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)));
   };
 
   const deleteTask = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setTasks((current) => current.filter((task) => task.id !== id));
   };
 
@@ -258,12 +223,16 @@ function AppShell() {
 
 function TaskListScreen({ navigation, tasks, colors, isDark, setIsDark, addMany, toggleTask, deleteTask }: any) {
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<TaskFilter>('all');
   const [voiceOpen, setVoiceOpen] = useState(false);
   const visibleTasks = useMemo(() => {
-    return tasks
-      .filter((task: Task) => `${task.title} ${task.description ?? ''}`.toLowerCase().includes(query.toLowerCase()))
-      .sort((a: Task, b: Task) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
-  }, [query, tasks]);
+    return filterAndSortTasks(tasks, query, filter);
+  }, [filter, query, tasks]);
+
+  const changeFilter = (nextFilter: TaskFilter) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setFilter(nextFilter);
+  };
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -290,6 +259,25 @@ function TaskListScreen({ navigation, tasks, colors, isDark, setIsDark, addMany,
         />
       </View>
 
+      <View style={[styles.filterBar, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+        {(['all', 'active', 'completed'] as TaskFilter[]).map((item) => {
+          const selected = filter === item;
+          return (
+            <Pressable
+              key={item}
+              onPress={() => changeFilter(item)}
+              style={[styles.filterButton, { backgroundColor: selected ? colors.primary : 'transparent' }]}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text style={[styles.filterText, { color: selected ? '#FFFFFF' : colors.text }]}>
+                {item === 'all' ? 'All' : item === 'active' ? 'Active' : 'Completed'}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <FlatList
         data={visibleTasks}
         keyExtractor={(item) => item.id}
@@ -297,8 +285,10 @@ function TaskListScreen({ navigation, tasks, colors, isDark, setIsDark, addMany,
         ListEmptyComponent={
           <View style={[styles.emptyState, { borderColor: colors.border }]}>
             <Ionicons name="checkmark-done-circle-outline" size={48} color={colors.primary} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No tasks yet</Text>
-            <Text style={[styles.emptyCopy, { color: colors.muted }]}>Add a task manually or use the voice button.</Text>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>{tasks.length ? 'No matching tasks' : 'No tasks yet'}</Text>
+            <Text style={[styles.emptyCopy, { color: colors.muted }]}>
+              {tasks.length ? 'Adjust the search or filter.' : 'Add a task manually or use the voice button.'}
+            </Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -444,6 +434,9 @@ const styles = StyleSheet.create({
   themeRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 },
   searchBox: { minHeight: 52, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchInput: { flex: 1, fontSize: 16, minHeight: 48 },
+  filterBar: { minHeight: 48, borderWidth: 1, borderRadius: 8, padding: 4, marginTop: 12, flexDirection: 'row', gap: 4 },
+  filterButton: { flex: 1, minHeight: 38, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  filterText: { fontSize: 14, fontWeight: '800' },
   listContent: { paddingTop: 18, paddingBottom: 120, flexGrow: 1 },
   emptyState: { flex: 1, minHeight: 320, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center', padding: 24 },
   emptyTitle: { marginTop: 14, fontSize: 22, fontWeight: '800' },

@@ -12,6 +12,9 @@ React Native Expo Go to-do list app for the AirLabs developer exercise.
 - React Navigation with Task List and Add Task screens
 - Voice input FAB with microphone recording, Gemini audio transcription, and intelligent task extraction
 - Search, due-date sorting, light/dark theme toggle
+- All, active, and completed filters
+- Layout transitions when tasks are added, toggled, deleted, or filtered
+- Unit tests for task parsing, Gemini response parsing, MIME detection, filtering, and due-date sorting
 
 ## Run
 
@@ -21,6 +24,12 @@ npm start
 ```
 
 Scan the Expo QR code with Expo Go, or run on an emulator from the Expo developer tools.
+
+## Test
+
+```bash
+npm test
+```
 
 ## Voice Input
 
@@ -40,20 +49,58 @@ The voice modal records audio, sends it to Gemini, extracts task titles, and let
 
 ## Screenshots
 
-Add real PNG or JPG screenshots from a device or emulator to the `screenshots` folder before submission.
+The screenshots below are captured from the running Expo app and cover the required screens and key states.
 
-Required files:
+### Empty Task List
 
-- `screenshots/task-list-empty.png`
-- `screenshots/task-list-mixed.png`
-- `screenshots/add-task.png`
-- `screenshots/voice-input.png`
-- `screenshots/dark-theme.png`
+Shows the task list empty state before any task has been added.
 
-Embed them here after capturing:
+![Empty task list](screenshots/no-tasks.jpeg)
 
-![Task list empty](screenshots/task-list-empty.png)
-![Task list mixed](screenshots/task-list-mixed.png)
-![Add task](screenshots/add-task.png)
-![Voice input](screenshots/voice-input.png)
-![Dark theme](screenshots/dark-theme.png)
+### Add Task Screen
+
+Shows the manual task creation screen with title, description, and due date fields.
+
+![Add task screen](screenshots/add-task-page.jpeg)
+
+### All Tasks
+
+Shows the main task list with multiple tasks displayed together.
+
+![All tasks list](screenshots/list-all-tasks.jpeg)
+
+### Active Tasks
+
+Shows the active filter displaying incomplete tasks.
+
+![Active tasks list](screenshots/list-active-tasks.jpeg)
+
+### Completed Tasks
+
+Shows completed tasks with a distinct completed visual state.
+
+![Completed tasks](screenshots/completed-tasks.jpeg)
+
+### Filtered Search
+
+Shows task search/filter behavior after entering text.
+
+![Filtered task text](screenshots/filter-texts.jpeg)
+
+### Voice Input Listening
+
+Shows the FAB voice input modal while the app is listening for dictated tasks.
+
+![Voice input listening](screenshots/voice-listening.jpeg)
+
+### Voice Input Processing
+
+Shows the app processing recorded audio with Gemini.
+
+![Processing voice audio](screenshots/processing-audio.jpeg)
+
+### Generated Voice Tasks
+
+Shows tasks generated from dictated voice input before they are added to the list.
+
+![Generated voice tasks](screenshots/generated-tasks.jpeg)
