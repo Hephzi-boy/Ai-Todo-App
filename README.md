@@ -47,6 +47,12 @@ npm start -- --clear
 
 The voice modal records audio, sends it to Gemini, extracts task titles, and lets you review them before adding. Without a working API key, the modal still supports manual transcript entry so the task-splitting flow can be tested.
 
+## Demo Video
+
+View the app walkthrough video on Google Drive:
+
+[Watch the demo video](https://drive.google.com/file/d/142W5C6qqytWRp876jr6aH9s2gELOKjgW/view?usp=sharing)
+
 ## Screenshots
 
 The screenshots below are captured from the running Expo app and cover the required screens and key states.
